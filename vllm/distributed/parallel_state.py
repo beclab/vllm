@@ -534,6 +534,19 @@ class GroupCoordinator:
         assert sibling is not None
         return sibling
 
+    def make_sibling_cpu_group(self, group_desc: str | None = None) -> ProcessGroup:
+        """Like `make_sibling_device_group`, but backed by gloo. Collective
+        call: every world rank must invoke it."""
+        sibling: ProcessGroup | None = None
+        for ranks in self.group_ranks:
+            pg = torch.distributed.new_group(
+                ranks, backend="gloo", group_desc=group_desc
+            )
+            if self.rank in ranks:
+                sibling = pg
+        assert sibling is not None
+        return sibling
+
     def create_mq_broadcaster(
         self, writer_rank=0, external_writer_handle=None, blocking=True
     ):

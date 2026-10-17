@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     VLLM_USE_RAY_COMPILED_DAG_OVERLAP_COMM: bool = False
     VLLM_USE_RAY_WRAPPED_PP_COMM: bool = True
     VLLM_XPU_PP_MICROBATCH: bool = True
+    VLLM_XPU_PP_HOST_BROADCAST: bool = True
     VLLM_USE_RAY_V2_EXECUTOR_BACKEND: bool = False
     VLLM_DISTRIBUTED_USE_SPLIT_GROUP: bool = False
     VLLM_XLA_USE_SPMD: bool = False
@@ -909,6 +910,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # decide to disable it when they needed.
     "VLLM_XPU_PP_MICROBATCH": lambda: bool(
         int(os.getenv("VLLM_XPU_PP_MICROBATCH", "1"))
+    ),
+    # On XPU, send the MRV2 PP sampled/draft token broadcast over a gloo group
+    # from a helper thread instead of a second xccl communicator.
+    "VLLM_XPU_PP_HOST_BROADCAST": lambda: bool(
+        int(os.getenv("VLLM_XPU_PP_HOST_BROADCAST", "1"))
     ),
     # When True and distributed_executor_backend="ray", use RayExecutorV2
     # (MQ-based) instead of RayDistributedExecutor (compiled-graph backend).
