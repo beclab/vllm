@@ -213,6 +213,12 @@ class SpeculativeConfig:
     """Load config for the draft model. If not specified, will use the load
     config from the target model."""
 
+    draft_lm_head_quantization: Literal["int4"] | None = None
+    """Quantize the drafter's copy of a target lm_head it shares (EAGLE and
+    MTP). "int4" is symmetric weight-only int4 (group 128) on the platform's
+    W4A16 mixed-precision kernel. The target verifies with its own head, so
+    only the acceptance length can change. Model Runner V2 only."""
+
     rejection_sample_method: RejectionSampleMethod = "standard"
     """The rejection sampling method to use. 'standard' uses probabilistic
     rejection sampling (with or without cached draft logits, controlled by
@@ -1236,6 +1242,15 @@ class SpeculativeConfig:
             raise ValueError(
                 "Expected num_speculative_tokens to be greater "
                 f"than zero ({self.num_speculative_tokens})."
+            )
+
+        if self.draft_lm_head_quantization is not None and not (
+            self.method in ("eagle", "eagle3")
+            or self.method in get_args(MTPModelTypes)
+        ):
+            raise ValueError(
+                "draft_lm_head_quantization is not supported for method "
+                f"{self.method!r}."
             )
 
         if self.rejection_sample_method == "synthetic":
