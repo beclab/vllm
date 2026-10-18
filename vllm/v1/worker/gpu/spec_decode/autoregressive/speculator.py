@@ -9,6 +9,7 @@ from vllm.config.compilation import CUDAGraphMode
 from vllm.forward_context import BatchDescriptor, set_forward_context
 from vllm.logger import init_logger
 from vllm.multimodal import MULTIMODAL_REGISTRY
+from vllm.platforms import current_platform
 from vllm.triton_utils import tl, triton
 from vllm.v1.worker.gpu.attn_utils import build_slot_mappings_by_layer
 from vllm.v1.worker.gpu.cudagraph_utils import (
@@ -59,6 +60,15 @@ class AutoRegressiveSpeculator(DraftModelSpeculator):
         return True
 
     def init_cudagraph_manager(self, cudagraph_mode: CUDAGraphMode) -> None:
+        if (
+            current_platform.is_xpu()
+            and self.vllm_config.parallel_config.tensor_parallel_size > 1
+            and cudagraph_mode != CUDAGraphMode.NONE
+        ):
+            # Replaying TP collectives inside the drafter's XPU graphs gives
+            # wrong drafts and corrupts target output (oneCCL 2021.15).
+            logger.warning_once("XPU with TP > 1: running the drafter eagerly.")
+            cudagraph_mode = CUDAGraphMode.NONE
         # Initialize cudagraph manager for draft prefill (draft position 0).
         self.prefill_cudagraph_manager = SpeculatorCudaGraphManager(
             self.vllm_config,
