@@ -7,6 +7,7 @@ from vllm.config import VllmConfig, replace
 from vllm.distributed.parallel_state import get_pp_group
 from vllm.lora.layers.base import BaseLayerWithLoRA
 from vllm.model_executor.model_loader import get_model
+from vllm.model_executor.models.utils import PPMissingLayer
 
 
 def _should_share(eagle: nn.Module, flag: str, draft, target) -> bool:
@@ -60,11 +61,15 @@ def load_eagle_model(target_model: nn.Module, vllm_config: VllmConfig) -> nn.Mod
     target_inner = target_language_model.model
     draft_inner = eagle_model.model
 
-    # Skip embedding sharing under PP — each rank owns its own embedding.
-    if get_pp_group().world_size == 1:
-        target_embed = getattr(target_inner, "embed_tokens", None) or getattr(
-            target_inner, "embedding", None
-        )
+    target_embed = getattr(target_inner, "embed_tokens", None) or getattr(
+        target_inner, "embedding", None
+    )
+    # Under PP only stages whose target holds a real embedding can share it
+    # (e.g. Qwen3.5 builds embed_tokens on every stage); otherwise the drafter
+    # keeps its own copy.
+    if isinstance(target_embed, PPMissingLayer):
+        target_embed = None
+    if get_pp_group().world_size == 1 or target_embed is not None:
         # If the target's embedding is LoRA-wrapped, share the underlying base
         # layer. The draft is not part of the LoRA adapter; sharing the wrapper
         # would make the draft run the LoRA embedding kernel with the target's
